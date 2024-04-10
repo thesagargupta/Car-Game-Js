@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Racing Game</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            display: block;
+            border: 2vw solid #000;
+            max-width: 90vw;
+            max-height: 80vh;
+        }
+
+        .heading {
+            font-size: 24px;
+            margin-top: 10px;
+            color: #333;
+            letter-spacing: 1px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            border: 2px solid #000;
+            z-index: 1;
+            text-align: center;
+            background: linear-gradient(to right, #ff6b6b, #ffa07a);
+        }
+
+        .modal h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .modal button {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            margin: 5px;
+        }
+
+        .modal button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<h1 class="heading"><i class="fas fa-gamepad"></i> GAME BY SAGAR GUPTA</h1>
+
+<div class="modal" id="countdownModal">
+    <h1 id="countdownText" onclick="startGame()">GO</h1>
+</div>
+
+<div class="modal" id="levelUpModal">
+    <h1>CONGRATULATIONS!!!</h1>
+    <h1>NEXT LEVEL UNLOCKED</h1>
+    <button onclick="startNextLevel()">Thank You</button>
+</div>
+
+<div class="modal" id="gameOverModal">
+    <h1>GAME OVER</h1>
+    <h1>Your Score: <span id="gameOverScore"></span></h1>
+    <button onclick="restartGame()">RESTART</button>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const carImage = new Image();
+    carImage.onload = function() {
+        // Draw the car image after it's loaded
+        drawCar(car.x, car.y);
+    };
+    carImage.src = 'https://i.postimg.cc/HWR9HrsR/main-car.png';
+
+    const obstacleImage = new Image();
+    obstacleImage.onload = function() {
+        // Draw the obstacle image after it's loaded
+        drawObstacles();
+    };
+    obstacleImage.src = 'https://i.postimg.cc/5tC4FkMf/obstac.png';
+
+    let isGamePaused = false;
+
+    function togglePause() {
+        if (isGamePaused) {
+            document.getElementById("togglePause").textContent = "Pause";
+            resumeGame();
+        } else {
+            document.getElementById("togglePause").textContent = "Play";
+            pauseGame();
+        }
+        isGamePaused = !isGamePaused;
+    }
+
+    const car = {
+        x: canvas.width / 2 - 25,
+        y: canvas.height - 100,
+        width: 50,
+        height: 80,
+        color: "blue",
+        speed: 5,
+        moving: { left: false, right: false }
+    };
+
+    let level = 1;
+    let score = 0;
+    let countdown = 12; // Countdown timer in seconds
+    let gameStarted = false;
+    let levelUp = false;
+    let displayCongratulations = false;
+    let pauseGame = false;
+    let speedIncrease = false;
+
+    const obstacles = [];
+
+    function drawCar(x, y) {
+        ctx.drawImage(carImage, x, y, car.width, car.height);
+    }
+
+    function drawObstacles() {
+        for (const obstacle of obstacles) {
+            ctx.drawImage(obstacleImage, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        }
+    }
+
+    function drawRoad() {
+        ctx.fillStyle = "#808080"; // Gray color for road
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#fff"; // White color for center line
+        ctx.fillRect(canvas.width / 2 - 5, 0, 10, canvas.height);
+    }
+    
+    function drawCountdownModal() {
+        const modal = document.getElementById("countdownModal");
+        const countdownText = document.getElementById("countdownText");
+
+        modal.style.display = "block";
+        countdownText.textContent = "GO";
+    }
+
+    function hideCountdownModal() {
+        const modal = document.getElementById("countdownModal");
+        modal.style.display = "none";
+    }
+
+    function drawLevelUpModal() {
+        const modal = document.getElementById("levelUpModal");
+        modal.style.display = "block";
+    }
+
+    function hideLevelUpModal() {
+        const modal = document.getElementById("levelUpModal");
+        modal.style.display = "none";
+    }
+
+    function drawGameOverModal() {
+        const modal = document.getElementById("gameOverModal");
+        const scoreText = document.getElementById("gameOverScore");
+
+        scoreText.textContent = score;
+        modal.style.display = "block";
+    }
+
+    function hideGameOverModal() {
+        const modal = document.getElementById("gameOverModal");
+        modal.style.display = "none";
+    }
+
+    function drawLevelAndScore() {
+        ctx.font = "24px Arial";
+        ctx.fillStyle = "black";
+        ctx.fillText("Level: " + level, 10, 30);
+        ctx.fillText("Score: " + score, 10, 60);
+    }
+
+    function update() {
+        if (!gameStarted || pauseGame) {
+            drawCountdownModal();
+            drawLevelAndScore();
+            return;
+        }
+
+        hideCountdownModal();
+
+        // Update player's car position
+        if (car.moving.left) {
+            car.x -= car.speed;
+        } else if (car.moving.right) {
+            car.x += car.speed;
+        }
+
+        car.x = Math.max(0, Math.min(car.x, canvas.width - car.width));
+
+        drawRoad();
+        drawCar(car.x, car.y, car.color);
+        drawObstacles();
+        drawLevelAndScore();
+
+        // Move obstacles
+        for (const obstacle of obstacles) {
+            obstacle.y += obstacle.speed;
+
+            // Check collision with the player's car
+            if (
+                car.x < obstacle.x + obstacle.width &&
+                car.x + car.width > obstacle.x &&
+                car.y < obstacle.y + obstacle.height &&
+                car.y + car.height > obstacle.y
+            ) {
+                // Collision occurred
+                drawGameOverModal();
+                // Reset the game or perform any other actions as needed.
+                level = 1;
+                score = 0;
+                countdown = 12; // Reset countdown timer
+                gameStarted = false;
+                obstacles.length = 0; // Clear the obstacles array
+                levelUp = false; // Reset the levelUp flag
+                displayCongratulations = false; // Reset the displayCongratulations flag
+                pauseGame = false; // Reset the pauseGame flag
+                speedIncrease = false; // Reset the speedIncrease flag
+            }
+
+            // Remove obstacles that go off the screen
+            if (obstacle.y > canvas.height) {
+                obstacles.splice(obstacles.indexOf(obstacle), 1);
+                score += 2; // Increase score for each avoided obstacle (2 points each)
+            }
+        }
+
+        // Increase difficulty with each level
+        if (score >= level * 100 && !levelUp) {
+            levelUp = true;
+            drawLevelUpModal();
+            displayCongratulations = true;
+
+            // Increase the speed of obstacles with each level
+            for (const obstacle of obstacles) {
+                obstacle.speed += 0.5;
+            }
+        }
+
+        if (levelUp && score < level * 100 && displayCongratulations) {
+            drawLevelUpModal();
+        }
+
+        if (levelUp && score < level * 100 && !displayCongratulations) {
+            hideLevelUpModal();
+            levelUp = false;
+        }
+
+        if (score >= level * 100) {
+            level++;
+            pauseGame = true;
+        }
+
+        // Increase speed of obstacles when the upper arrow key is pressed and held
+        if (speedIncrease) {
+            for (const obstacle of obstacles) {
+                obstacle.speed += 0.1;
+            }
+        }
+    }
+
+    function restartGame() {
+        hideGameOverModal();
+        startGame();
+    }
+
+    function startGame() {
+        if (pauseGame) {
+            pauseGame = false;
+        } else {
+            gameStarted = true;
+        }
+    }
+
+    function startNextLevel() {
+        hideLevelUpModal();
+        levelUp = false;
+        countdown = 12;
+        displayCongratulations = false;
+        startGame();
+    }
+
+    function spawnObstacle() {
+        const obstacle = {
+            x: Math.random() * (canvas.width - car.width),
+            y: 0,
+            width: 50,
+            height: 80,
+            color: "red",
+            speed: 3 + level * 0.5
+        };
+
+        const whiteLineX = canvas.width / 2 - 5;
+        const whiteLineWidth = 10;
+
+        if (
+            obstacle.x + obstacle.width < whiteLineX ||
+            obstacle.x > whiteLineX + whiteLineWidth
+        ) {
+            const minDistanceBetweenObstacles = 100;
+            let collision = false;
+
+            for (const existingObstacle of obstacles) {
+                if (
+                    obstacle.x < existingObstacle.x + existingObstacle.width &&
+                    obstacle.x + obstacle.width > existingObstacle.x &&
+                    Math.abs(obstacle.y - existingObstacle.y) < minDistanceBetweenObstacles
+                ) {
+                    collision = true;
+                    break;
+                }
+            }
+
+            if (!collision) {
+                obstacles.push(obstacle);
+            }
+        } else {
+            spawnObstacle();
+        }
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (countdown > 0) {
+            drawCountdownModal();
+            countdown--;
+        } else {
+            if (Math.random() < 0.02) {
+                spawnObstacle();
+            }
+            update();
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    document.getElementById("countdownText").addEventListener("click", startGame);
+    document.getElementById("levelUpModal").addEventListener("click", startNextLevel);
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keyup", handleKeyUp);
+
+    function handleMouseDown(event) {
+        const tapX = event.clientX;
+        const screenWidth = window.innerWidth;
+
+        if (tapX < screenWidth / 2) {
+            car.moving.left = true;
+        } else {
+            car.moving.right = true;
+        }
+
+        // Check if the upper arrow key is pressed and held
+        if (event.code === "ArrowUp") {
+            speedIncrease = true;
+        }
+    }
+
+    function handleMouseUp() {
+        car.moving.left = false;
+        car.moving.right = false;
+
+        // Reset the speedIncrease flag when the mouse is released
+        speedIncrease = false;
+    }
+
+    function handleKeyDown(event) {
+        if (event.key === "ArrowLeft") {
+            car.moving.left = true;
+        } else if (event.key === "ArrowRight") {
+            car.moving.right = true;
+        }
+
+        // Check if the upper arrow key is pressed and held
+        if (event.code === "ArrowUp") {
+            speedIncrease = true;
+        }
+    }
+
+    function handleKeyUp(event) {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            car.moving.left = false;
+            car.moving.right = false;
+        }
+
+        // Reset the speedIncrease flag when the key is released
+        if (event.code === "ArrowUp") {
+            speedIncrease = false;
+        }
+    }
+
+    gameLoop();
+
+
+    // Rest of your JavaScript code...
+    // Ensure you keep the rest of your JavaScript code here
+</script>
+</body>
+</html>
